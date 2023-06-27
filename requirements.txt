@@ -1,0 +1,17 @@
+pandas 
+google-cloud-bigquery
+pandas-gbq
+fsspec
+gcsfs
+geopy
+haversine
+requests
+numpy
+google-cloud-secret-manager
+haversine
+google-cloud-storage
+google-api-python-client
+google-api-core
+google-auth
+gspread
+pyarrow
