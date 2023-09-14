@@ -8,6 +8,12 @@ BUCKET_NAME = "eco-project-bucket-raw"
 DESTINATION_FILE_NAME = "google_form_data"
 
 def gsheets_to_csv():
+    """
+    Converts data from a Google Sheets document into a CSV format.
+
+    Returns:
+        str: A string containing the CSV data.
+    """
     credentials, _ = google.auth.default(
         scopes=[
             "https://www.googleapis.com/auth/spreadsheets.readonly", "https://www.googleapis.com/auth/drive"
