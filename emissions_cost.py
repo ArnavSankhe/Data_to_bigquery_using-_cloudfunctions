@@ -33,7 +33,7 @@ def get_emissions(distance, mode, journeytype):
 def cost(emissions):
     """
     Computes the cost of offsetting emissions based on the amount of emissions in tCO2e.
-
+  
     # existing code for the 'cost' function
     pass
     Parameters:
