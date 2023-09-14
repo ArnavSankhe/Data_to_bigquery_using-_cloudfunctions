@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from function_to_get_co_ordinates import check_local_cache
 from get_distance import get_distance_flight,get_distance
@@ -11,6 +12,7 @@ import csv
 from google.cloud import secretmanager
 from get_distance import load_distance_cache
 from google.api_core.exceptions import NotFound
+from load_to_bigquery import load_to_bq
 import pyarrow
 
 
@@ -28,6 +30,16 @@ source_file_name = "google_form_data.csv"
 
 
 def access_secret_version(secret_id, version_id=1):
+    """
+    Accesses a secret version from Google Secret Manager.
+
+    Args:
+        secret_id (str): The ID of the secret to access.
+        version_id (int, optional): The version of the secret to access (default is 1).
+
+    Returns:
+        str: The payload data of the secret version as a UTF-8 decoded string.
+    """
     client = secretmanager.SecretManagerServiceClient()
     name = f"projects/{PROJECT_NO}/secrets/{secret_id}/versions/{version_id}"
     response = client.access_secret_version(name=name)
@@ -102,99 +114,41 @@ def append_new_records_to_processed_file(df):
 
 
 
-def load_to_bq(df):
-    # Read in the data from the file and process it
-    df.columns = ['timeststamp', 'email_id', 'travel_date', 'origin', 'destination', 'journey_type', 'mode_travel', 'distance_in_km','time_in_sec','Emissions_in_kgco2e', 'Cost']
-    print(df.dtypes)
-    df['timeststamp'] = pd.to_datetime(df['timeststamp'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-    df['travel_date'] = pd.to_datetime(df['travel_date'], format='%d/%m/%Y', errors='coerce')
-    bq_client = bigquery.Client(project=project_id)
-    dataset_ref = bq_client.dataset(bq_dataset_name)
-    dataset = bigquery.Dataset(dataset_ref)
-    dataset.location = "europe-west2"
-    try:
-        bq_client.get_dataset(dataset)
-    except NotFound:
-        # If the dataset does not exist, create it
-        bq_client.create_dataset(dataset)
 
-    table_path = f"{project_id}.{bq_dataset_name}.{bq_table_name}"
-    try:
-        table = bq_client.get_table(table_path)
-        
-        job_config = bigquery.LoadJobConfig()
-        job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-        job = bq_client.load_table_from_dataframe(df, table_path, job_config=job_config)
-    
-    except NotFound:
-        # Table does not exist, create the table and load the data
-        schema = schema = [
-            bigquery.SchemaField("timeststamp", "DATETIME"),
-            bigquery.SchemaField("email_id", "STRING"),
-            bigquery.SchemaField("travel_date", "DATE"),
-            bigquery.SchemaField("origin", "STRING"),
-            bigquery.SchemaField("destination", "STRING"),
-            bigquery.SchemaField("journey_type", "STRING"),
-            bigquery.SchemaField("mode_travel", "STRING"),
-            bigquery.SchemaField("distance_in_km", "FLOAT"),
-            bigquery.SchemaField("time_in_sec", "FLOAT"),
-            bigquery.SchemaField("Emissions_in_kgco2e", "FLOAT"),
-            bigquery.SchemaField("Cost", "FLOAT")
-
-        ]
-
-        table = bigquery.Table(table_path, schema=schema)
-        table = bq_client.create_table(table)
-        job_config = bigquery.LoadJobConfig()
-        job_config.schema = schema
-        job = bq_client.load_table_from_dataframe(df, table_path, job_config=job_config)
-        job.result()
-    return df
 
 
 
 
 def main(request):
-
+    """
+    This function performs calculations for new records and loads the transformed data to BigQuery.
+    It also appends the processed CSV file to the target bucket.
+    """
     csv_data = gsheets_to_csv()
     upload_csv(csv_data)
-    #df = pd.read_csv(travel_data_uri, nrows=5)
     Api_key = access_secret_version("maps-api-key")
     timestamp = get_last_timestamp(target_file_name)
     delta_records = get_new_records(source_file_name, timestamp)
     df = pd.DataFrame(delta_records, columns=['timeststamp', 'email_id', 'travel_date', 'origin', 'destination', 'journey_type', 'mode_travel'])
+    
     if df.empty:
         return f"No new records to add. Function exiting"
     else:
-        for index, row in df.iterrows():
-            df.at[index, 'destination'] = get_office_address(row['destination'])
-
-
-        #df = df.rename(columns={"Timestamp": "timestamp", "Email address": "email", "When are you travelling?":"date", "Where are you travelling from (this can be your postcode or the town you are coming from)?":"origin","Which office are you travelling to (if not listed please enter the postcode of the office you'll be using)?":"destination","Type of journey":"journeytype","What mode of transport are you using?":"mode_travel"})
-        # checking if address is availabe in the local cahe (if it is the we map it directly for the cache) if not we make a list of address that are not availabe then we call the api for just those unique addresses and append these new address to the local cache for future use and map it.
-        
-        
+        df['destination'] = df['destination'].apply(get_office_address)
         new_Hmap = check_local_cache(df['origin'].unique())
         df['origin_co_ordinates'] = df['origin'].map(new_Hmap)    
         new_Hmap = check_local_cache(df['destination'].unique())
         df['destination_co_ordinates'] = df['destination'].map(new_Hmap)
-        # calculate the distance
-        #df['distance_time'] = pd.Series(get_distance(('51.33505, -0.11029'),('51.5073219, -0.1276474'), 'Train' , Api_key))
         Hmap = load_distance_cache()
-        #print(Hmap)
-        df['distance_time'] = (df.apply(lambda x: (get_distance(x.origin_co_ordinates,x.destination_co_ordinates, x.mode_travel, Api_key, Hmap) if x.mode_travel != 'Plane' else get_distance_flight(x.origin_co_ordinates, x.destination_co_ordinates)),axis=1))
-        #print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", len(df.index))
+        df['distance_time'] = np.where(df['mode_travel'] != 'Plane', df.apply(lambda x: get_distance(x.origin_co_ordinates, x.destination_co_ordinates, x.mode_travel, Api_key, Hmap), axis=1), df.apply(lambda x: get_distance_flight(x.origin_co_ordinates, x.destination_co_ordinates), axis=1))
         df = df[df.astype(str).ne('None').all(1)]
-        #print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", len(df.index))
-        df['distance_in_km'] = df['distance_time'].apply(lambda x: x[0]/1000)
-        df['Time_in_sec'] = df['distance_time'].apply(lambda x: x[1])
+        df['distance_in_km'] = df['distance_time'].str[0] / 1000
+        df['Time_in_sec'] = df['distance_time'].str[1]
         df['Emissions_in_kgco2e'] = df.apply(lambda x: get_emissions(x.distance_in_km, x.mode_travel, x.journey_type), axis=1)
-        df['Cost'] = df['Emissions_in_kgco2e'].apply(lambda x: cost(x))
-        df = df.drop(['distance_time','origin_co_ordinates','destination_co_ordinates'], axis=1)
-        #print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", df)
+        df['Cost'] = df['Emissions_in_kgco2e'].apply(cost)
+        df = df.drop(columns=['distance_time','origin_co_ordinates','destination_co_ordinates'])
         load_to_bq(df)
         append_new_records_to_processed_file(df)
 
         return f"Calculations for new records completed and new transformed data loaded to bigquery. Processed CSV file {target_file_name}loaded to {target_bucket_name} bucket"
-
         #print(df)
