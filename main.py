@@ -12,112 +12,17 @@ import csv
 from google.cloud import secretmanager
 from get_distance import load_distance_cache
 from google.api_core.exceptions import NotFound
-from load_to_bigquery import load_to_bq
+from load_to_bigquery import load_to_bq, access_secret_version, get_last_timestamp, get_new_records, append_new_records_to_processed_file
 import pyarrow
 
-
-
-#travel_data_uri = "/home/ar    nav/Desktop/git/test/Travel.csv"
-PROJECT_NO = 431555079587
+PROJECT_NO = xxxx
 project_id = "************"
-target_file_name = "google_form_data_processed.csv"
-target_bucket_name = "eco-project-bucket-processed"
-bq_table_name = "google_forms_emissions"
-bq_dataset_name = "eco_project"
-source_bucket_name = "eco-project-bucket-raw"
-source_file_name = "google_form_data.csv"
-
-
-
-def access_secret_version(secret_id, version_id=1):
-    """
-    Accesses a secret version from Google Secret Manager.
-
-    Args:
-        secret_id (str): The ID of the secret to access.
-        version_id (int, optional): The version of the secret to access (default is 1).
-
-    Returns:
-        str: The payload data of the secret version as a UTF-8 decoded string.
-    """
-    client = secretmanager.SecretManagerServiceClient()
-    name = f"projects/{PROJECT_NO}/secrets/{secret_id}/versions/{version_id}"
-    response = client.access_secret_version(name=name)
-    return response.payload.data.decode("UTF-8")
-
-# get new records added from input file weekly
-def get_new_records(source_file_name, timestamp):
-    if timestamp!=0:
-        timestamp_datetime = datetime.fromtimestamp(timestamp)
-    records = []
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(source_bucket_name)
-    blob_name = f"google_forms_data/{source_file_name}"   # input data path
-    blob = bucket.blob(blob_name)
-    file_content = blob.download_as_string().decode('utf-8')
-    reader = csv.reader(file_content.splitlines())
-    header = next(reader)
-    for row in reader:
-        time_datetime = datetime.strptime(row[0], "%d/%m/%Y %H:%M:%S")
-        if timestamp == 0 or time_datetime > timestamp_datetime: 
-            records.append(row)
-    return records
-
-# Get timestamp of last record in the processed file
-def get_last_timestamp(target_file_name):
-     client = storage.Client()
-     bucket = client.bucket(target_bucket_name)
-     blob_name = f"google_forms_data/{target_file_name}"
-     blob = bucket.blob(blob_name)
-     if blob.exists():
-          text = blob.download_as_string().decode("utf-8")
-          lines = csv.reader(text.splitlines())
-          lines = list(lines)
-          last_line = lines[-1]
-          first_column = last_line[0]
-          first_column = datetime.strptime(first_column, "%Y-%m-%d %H:%M:%S").timestamp()
-          return first_column
-     else:
-          return 0
-
-
-OFFICES = {
-    "Manchester": "",
-    "Utrecht": "",
-    "Edinburgh": "",
-    "London": "",
-}
-
-# Change destination location to exact office location if location in OFFICES dict
-def get_office_address(location):
-    return OFFICES[location] if location in OFFICES else location
-
-def append_new_records_to_processed_file(df):
-    client = storage.Client()
-    bucket = client.bucket(target_bucket_name)
-    blob_name = f"google_forms_data/{target_file_name}"  # processed file path
-    blob = bucket.blob(blob_name)
-
-    if blob.exists():
-        file_content = blob.download_as_string().decode("utf-8")
-        print(file_content)
-        df_old = pd.read_csv(io.StringIO(file_content))
-
-        updated_df = pd.concat([df_old, df], ignore_index=True)
-        updated_csv = updated_df.to_csv(index=False, header=True)
-    else:
-        updated_csv = df.to_csv(index=False, header=True)
-        
-    blob.upload_from_string(updated_csv, content_type='text/csv')
-
-
-
-
-
-
-
-
-
+target_file_name = "xxxxx"
+target_bucket_name = "xxxx"
+bq_table_name = "xxxx"
+bq_dataset_name = "xx"
+source_bucket_name = "xxx"
+source_file_name = "xxx"
 
 def main(request):
     """

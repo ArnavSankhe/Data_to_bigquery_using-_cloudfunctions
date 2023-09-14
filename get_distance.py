@@ -29,15 +29,27 @@ def write_data_to_distance_cache(new_Hmap):
 
 
 def get_distance(origin, destination, mode, Api_key, Hmap):
+    """
+    Calculates the distance and duration of travel between two locations using the Google Maps Distance Matrix API.
+
+    Args:
+        origin (tuple): The latitude and longitude of the origin location.
+        destination (tuple): The latitude and longitude of the destination location.
+        mode (str): The mode of travel (e.g., 'driving', 'walking', 'transit').
+        Api_key (str): The API key for accessing the Google Maps Distance Matrix API.
+        Hmap (dict): A dictionary to store the distance and duration data for different origin-destination-mode combinations.
+
+    Returns:
+        tuple: The distance and duration of travel between the origin and destination locations. The distance is in meters and the duration is in seconds.
+    """
+
     origin_final = ','.join([str(i) for i in origin])
     dest_final = ','.join([str(i) for i in destination])
-    unique_key = origin_final + dest_final +mode
-    unique_key = unique_key.replace(',','')
-    
-    #Hmap = load_distance_cache()
+    unique_key = origin_final + dest_final + mode
+    unique_key = unique_key.replace(',', '')
+
     dist = []
-    duration = [] 
-    #key = '51.33505-0.1102953.4794892-2.2451148Train'
+    duration = []
     if unique_key in Hmap:
         value = Hmap.get(unique_key)
         status = value["rows"][0]["elements"][0]["status"]
@@ -46,84 +58,86 @@ def get_distance(origin, destination, mode, Api_key, Hmap):
                 print(row["elements"])
                 for distance in row["elements"]:
                     dist.append(distance["distance"]['value'])
-                #duration_traffic = distance["duration_in_traffic"]['text']
                     print(distance)
                     for distance in row["elements"]:
                         duration.append(distance["duration"]['value'])
-            #for distance in row["elements"]:
-            #   duration_in_traffic.append(distance["duration_in_traffic"]['text'])
-        #return response_data
-            distance =  dist[0],duration[0]#,duration_in_traffic[0]
+            distance = dist[0], duration[0]  # ,duration_in_traffic[0]
 
-        
+            # distance =  0.0,0.0
 
-            #distance =  0.0,0.0
-        
             return distance
         else:
-            distance = distance_matrix_api_call(origin_final,dest_final, mode, Api_key, unique_key, Hmap)
-
+            distance = distance_matrix_api_call(origin_final, dest_final, mode, Api_key, unique_key, Hmap)
 
     else:
-        distance = distance_matrix_api_call(origin_final,dest_final, mode, Api_key, unique_key, Hmap)
+        distance = distance_matrix_api_call(origin_final, dest_final, mode, Api_key, unique_key, Hmap)
         return distance
 
 
 
 
 
+def distance_matrix_api_call(origin_final, dest_final, mode, Api_key, unique_key, Hmap):
+    """
+    Retrieves the distance and duration between two locations using the Google Distance Matrix API.
 
-def distance_matrix_api_call(origin_final,dest_final, mode, Api_key, unique_key, Hmap):
+    Args:
+        origin_final (string): The origin coordinates in the format "latitude,longitude".
+        dest_final (string): The destination coordinates in the format "latitude,longitude".
+        mode (string): The travel mode (e.g., "Train", "Car").
+        Api_key (string): The API key for accessing the Google Distance Matrix API.
+        unique_key (string): A unique key generated based on the origin, destination, and mode.
+        Hmap (dictionary): A cache of previously calculated distances.
+
+    Returns:
+        tuple: The distance and duration between the origin and destination.
+
+    """
     DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
     api_key = Api_key
     params = {
-            "destinations": dest_final,
-            "origins": origin_final,
-            "mode": mode,
-            "key": Api_key,
-        }
-    response = requests.get(DISTANCE_MATRIX_URL, params=params)    
+        "destinations": dest_final,
+        "origins": origin_final,
+        "mode": mode,
+        "key": Api_key,
+    }
+    response = requests.get(DISTANCE_MATRIX_URL, params=params)
     response_data = response.json()
-    
+
     dist = []
-    duration = [] 
+    duration = []
     try:
         status = response_data["rows"][0]["elements"][0]["status"]
         if status == "OK":
             for row in response_data["rows"]:
-                #print(row["elements"])
                 for distance in row["elements"]:
-                    dist.append(distance["distance"]['value'])
-            #duration_traffic = distance["duration_in_traffic"]['text']
-            #print(distance)
+                    dist.append(distance["distance"]["value"])
                 for distance in row["elements"]:
-                    duration.append(distance["duration"]['value'])
-        #for distance in row["elements"]:
-        #   duration_in_traffic.append(distance["duration_in_traffic"]['text'])
-    #return response_data
-        distance =  dist[0],duration[0]#,duration_in_traffic[0]
+                    duration.append(distance["duration"]["value"])
+        distance = dist[0], duration[0]
 
     except:
-
-        distance =  0.0,0.0
-    
+        distance = 0.0, 0.0
 
     a = dict(zip([unique_key], [response_data]))
     new_Hmap = {**a, **Hmap}
-    #write_data_to_distance_cache(new_Hmap)
-    
+    # write_data_to_distance_cache(new_Hmap)
+
     return distance
 
 
-
 def get_distance_flight(origin, destination):
-    #print(origin)
-    '''origin_coords = []
-    dest_coords = []
-    for i in origin:
-        origin_coords.append((i))
-    for i in destination:
-        dest_coords.append((i))'''
+    """
+    Calculates the distance and time taken for a flight between two locations using the haversine formula.
+    
+    Args:
+        origin (tuple): The latitude and longitude of the origin location.
+        destination (tuple): The latitude and longitude of the destination location.
+    
+    Returns:
+        distance (float): The distance between the origin and destination locations in meters.
+        time (float): The time taken by an average plane to cover the distance in seconds.
+    """
     try:
         if origin and destination:
             x = haversine(origin, destination, unit='mi')
@@ -132,7 +146,6 @@ def get_distance_flight(origin, destination):
             return 0.0,0.0
     except:
         return 0.0,0.0
-
 
 
 

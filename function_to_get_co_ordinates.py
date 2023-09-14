@@ -4,8 +4,18 @@ import pickle
 from google.cloud import storage
 
 
-def mutually_exclusive(list1,list2):
-    return list(set(list1)^set(list2))
+def mutually_exclusive(list1, list2):
+    """
+    Returns a new list containing the elements that are present in either of the input lists, but not in both.
+
+    Args:
+        list1 (list): The first input list.
+        list2 (list): The second input list.
+
+    Returns:
+        list: A new list containing the elements that are present in either of the input lists, but not in both.
+    """
+    return list(set(list1) ^ set(list2))
 
 
 def geopy_co_ordinates(unique_elements, Hmap):
@@ -26,16 +36,13 @@ def geopy_co_ordinates(unique_elements, Hmap):
 
 
 def check_local_cache(unique_elements):
+    """check if the value is present in the local cache and returns it if its present"""
     storage_client = storage.Client()
     bucket = storage_client.bucket('eco-project-bucket-processed')
     blob = bucket.blob('saved_dictionary.pkl')               #path to the storage bucket
     pickle_in = blob.download_as_string()
     Hmap = pickle.loads(pickle_in)
 
-
-
-    '''with open('saved_dictionary.pkl', 'rb') as f:
-            Hmap = pickle.load(f)'''
 
     if all(name in Hmap for name in unique_elements):
             #df['destination_co_ordinates'] = df['destination'].map(Hmap)
