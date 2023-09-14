@@ -1,4 +1,13 @@
 def load_to_bq(df):
+    """
+    Loads a pandas DataFrame into a BigQuery table.
+
+    Args:
+        df (pandas DataFrame): The DataFrame containing the data to be loaded into BigQuery.
+
+    Returns:
+        pandas DataFrame: The same DataFrame that was passed as input.
+    """
     # Read in the data from the file and process it
     df.columns = ['timeststamp', 'email_id', 'travel_date', 'origin', 'destination', 'journey_type', 'mode_travel', 'distance_in_km','time_in_sec','Emissions_in_kgco2e', 'Cost']
     print(df.dtypes)
